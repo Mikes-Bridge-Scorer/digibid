@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a1f0a">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Bidding Box</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+html, body { width:100%; height:100%; overflow:hidden; }
+body {
+  background:#0a1f0a;
+  font-family:'Arial Black', Arial, sans-serif;
+  display:flex;
+  flex-direction:column;
+}
+
+body {
+  background:#0a1f0a;
+  font-family:'Arial Black', Arial, sans-serif;
+  display:flex;
+  flex-direction:column;
+}
+/* ══ GREEN FELT ══ */
+.felt {
+  flex:1; min-height:0;
+  position:relative;
+  background:radial-gradient(ellipse 110% 100% at 50% 50%, #1e5624 0%, #0d2e10 60%, #060f06 100%);
+  overflow:hidden;
+}
+.felt::before {
+  content:''; position:absolute; inset:0; pointer-events:none; z-index:0;
+  background-image:
+    repeating-linear-gradient(0deg,  rgba(255,255,255,0.011) 0,transparent 1px,transparent 5px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.011) 0,transparent 1px,transparent 5px);
+}
+.felt::after {
+  content:''; position:absolute; inset:5px; pointer-events:none; z-index:1;
+  border:1.5px solid rgba(201,162,39,0.28); border-radius:12px;
+}
+
+/* ══ HISTORY STRIP ══ */
+.history-strip {
+  position:absolute;
+  top:10px; left:14px; right:14px;
+  z-index:3;
+  display:flex;
+  flex-direction:row;
+  align-items:center;
+  gap:4px;
+  overflow:hidden;          /* no scrollbar — chips just fill from left */
+  flex-wrap:nowrap;
+  height:26px;
+}
+.h-chip {
+  flex-shrink:0;
+  display:inline-flex;
+  align-items:center;
+  gap:1px;
+  background:rgba(0,0,0,0.38);
+  border:1px solid rgba(255,255,255,0.18);
+  border-radius:5px;
+  padding:2px 5px;
+  font-family:'Arial Black', Arial, sans-serif;
+  font-size:12px;
+  font-weight:900;
+  line-height:1;
+  white-space:nowrap;
+  color:#fff;
+}
+.h-chip.hp { color:#5dd65d; border-color:rgba(93,214,93,0.35); }  /* PASS */
+.h-chip.hd { color:#cc3300; border-color:rgba(200,80,0,0.35);  }  /* Dbl */
+.h-chip.hr { color:#ccaa00; border-color:rgba(200,170,0,0.35); }  /* Rdbl */
+.h-chip.hs { color:#ff9966; border-color:rgba(255,120,50,0.35);}  /* STOP */
+.h-chip .hs-suit-red    { color:#ff5555; }
+.h-chip .hs-suit-black  { color:#ffffff; }
+.h-chip .hs-suit-purple { color:#cc88ff; }
+
+/* ══ CARD RUNWAY ══
+   All cards are the same full height.
+   They overlap: each older card peeks out on the LEFT.
+   We use position:absolute stacking.
+   The runway itself is absolutely positioned to fill the felt.
+*/
+.runway {
+  position:absolute; inset:0; z-index:2;
+  display:flex;
+  align-items:center;
+}
+
+/*
+  Each .slot is positioned absolutely by JS.
+  It has a fixed square size (full card height).
+  overflow:hidden clips the right side of older cards.
+  z-index increases from left (oldest) to right (newest).
+*/
+.slot {
+  position:absolute;
+  /* width & height, top, left set by JS */
+  overflow:hidden;          /* clips right side for peek effect */
+  border-radius:10%;        /* on the slot container for clip shape */
+}
+
+/* ══ CARDS ══ */
+.card {
+  /* card is always full square - slot clips it */
+  position:absolute;
+  left:0; top:0;
+  width:var(--card-sz); height:var(--card-sz);
+  background:#ffffff;
+  border-radius:10%;
+  box-shadow:0 6px 28px rgba(0,0,0,0.75), 0 2px 6px rgba(0,0,0,0.4);
+  border:2px solid #ddd;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  overflow:hidden;
+}
+.card.c-pass  { background:#e8fae8; border-color:#66bb66; }
+.card.c-dbl   { background:#fff0e6; border-color:#cc9966; }
+.card.c-rdbl  { background:#fffddf; border-color:#ccbb33; }
+.card.c-stop  { background:linear-gradient(160deg,#ff1500,#990000); border-color:#ff4422; }
+.card.c-alert { background:#fff2cc; border-color:#ffaa22; }
+
+.card.flash { animation:goldFlash 0.5s ease-in-out 3; }
+@keyframes goldFlash {
+  0%,100% { box-shadow:0 6px 28px rgba(0,0,0,0.75), 0 2px 6px rgba(0,0,0,0.4); }
+  50%      { box-shadow:0 0 55px rgba(255,215,0,1), 0 0 110px rgba(255,215,0,0.4); }
+}
+/* Newest card slides in */
+.card.new-in { animation:slideIn 0.22s cubic-bezier(0.175,0.885,0.32,1.3); }
+@keyframes slideIn {
+  from { transform:scale(0.6) translateX(30px); opacity:0; }
+  to   { transform:scale(1)   translateX(0);    opacity:1; }
+}
+
+/* Card text sizes driven by CSS var --sz (= card height in px) */
+.c-num      { font-family:'Arial Black',Arial,sans-serif; font-weight:900; line-height:0.88; color:#111; font-size:calc(var(--sz)*0.42); }
+.c-suit     { font-family:'Arial',sans-serif; font-weight:900; line-height:0.9; font-size:calc(var(--sz)*0.40); }
+.c-word     { font-family:'Arial Black',Arial,sans-serif; font-weight:900; line-height:1; text-align:center; font-size:calc(var(--sz)*0.19); }
+.c-pass-txt { font-family:'Arial Black',Arial,sans-serif; font-weight:900; color:#0e880e; letter-spacing:0.03em; text-align:center; font-size:calc(var(--sz)*0.17); }
+
+/* ══ CONTRACT OVERLAY ══ */
+.contract-ov {
+  display:none; position:fixed; inset:0; z-index:9998;
+  background:rgba(3,10,3,0.97);
+  flex-direction:column; align-items:center; justify-content:center;
+  color:#fff; text-align:center;
+}
+.contract-ov.show { display:flex; }
+.cv-lbl  { font-size:clamp(14px,3vw,28px); color:#c9a227; letter-spacing:5px; text-transform:uppercase; margin-bottom:8px; }
+.cv-rule { width:clamp(60px,15vw,150px); height:1.5px; background:linear-gradient(90deg,transparent,#c9a227,transparent); margin:0 auto 14px; }
+.cv-val  { font-size:clamp(60px,20vw,190px); line-height:1; font-weight:900; }
+.cv-by   { font-size:clamp(13px,3.5vw,34px); color:rgba(200,230,200,0.85); letter-spacing:4px; margin-top:10px; }
+.cv-btn  { margin-top:22px; background:#c9a227; color:#0a1f0a; border:none; border-radius:10px; padding:12px 36px; font-family:'Arial Black',Arial,sans-serif; font-size:clamp(14px,2.5vw,22px); font-weight:900; cursor:pointer; letter-spacing:2px; }
+.cv-btn:active { filter:brightness(1.2); transform:scale(0.95); }
+
+/* ══ KEYBOARD ══ */
+.keyboard {
+  flex-shrink:0;
+  background:linear-gradient(180deg,#0e160e 0%,#080e08 100%);
+  border-top:2px solid rgba(201,162,39,0.35);
+  padding:4px 4px 5px;
+  display:flex; flex-direction:column; gap:3px;
+}
+.key-row { display:flex; gap:3px; }
+.key {
+  flex:1; height:clamp(40px,6.5vh,56px); border-radius:9px;
+  border:2px solid rgba(255,255,255,0.18);
+  background:#2d5c2d; color:#fff;
+  font-family:'Arial Black',Arial,sans-serif;
+  font-size:clamp(12px,1.7vh,18px); font-weight:900;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  min-width:0; line-height:1; transition:transform 0.07s,filter 0.07s; letter-spacing:0.5px;
+}
+.key:active:not([disabled]) { transform:scale(0.87); filter:brightness(1.6); }
+.key[disabled]               { opacity:0.2; cursor:default; }
+
+.k-pass    { background:linear-gradient(145deg,#16a616,#0d7a0d); border-color:#3ddd3d; font-size:clamp(13px,1.8vh,19px); box-shadow:0 3px 10px rgba(20,170,20,0.3); }
+.k-dbl     { background:linear-gradient(145deg,#8a5520,#663a0e); border-color:#bb8840; }
+.k-dbl.rdbl-mode { background:linear-gradient(145deg,#cc0088,#880055); border-color:#ff33bb; }
+.k-alert   { background:linear-gradient(145deg,#ee6600,#bb4400); border-color:#ffaa22; box-shadow:0 3px 10px rgba(220,100,0,0.25); }
+.k-stop    { background:linear-gradient(145deg,#dd0000,#990000); border-color:#ff3333; box-shadow:0 3px 10px rgba(200,0,0,0.25); }
+.k-undo    { background:linear-gradient(145deg,#404d40,#28322a); border-color:rgba(255,255,255,0.18); font-size:clamp(15px,2vh,22px); flex:0.75; }
+.k-wake    { background:linear-gradient(145deg,#183380,#0f1e55); border-color:#2e4daa; font-size:clamp(14px,1.9vh,20px); flex:0.75; }
+.k-wake.on { background:linear-gradient(145deg,#0077cc,#004488); border-color:#22aaff; box-shadow:0 0 12px rgba(0,140,255,0.4); }
+.k-newhand { background:linear-gradient(145deg,#2a382a,#1a221a); border-color:rgba(201,162,39,0.28); font-size:clamp(9px,1.2vh,12px); flex:0.85; line-height:1.3; text-align:center; color:rgba(201,162,39,0.85); }
+.k-lv      { background:linear-gradient(145deg,#387038,#244824); border-color:rgba(255,255,255,0.22); font-size:clamp(15px,2.2vh,24px); }
+.k-lv.sel  { background:linear-gradient(145deg,#cc9900,#886600); border-color:#ffdd00; box-shadow:0 0 14px rgba(255,210,0,0.65); }
+.k-lv[disabled] { background:#141e14; color:#3a5a3a; box-shadow:none; }
+.k-suit    { background:#fff; color:#111; border:2px solid #ccc; font-size:clamp(18px,3vh,30px); flex:1.1; font-family:'Arial',sans-serif; font-weight:900; box-shadow:0 3px 8px rgba(0,0,0,0.35); }
+.k-suit.red    { color:#cc0000; }
+.k-suit.purple { color:#550099; font-size:clamp(10px,1.5vh,15px); font-weight:900; }
+.k-suit[disabled] { background:#1a321a; border-color:#264026; color:#4a724a!important; opacity:0.35; box-shadow:none; }
+
+.btn-exit { position:fixed; top:8px; right:8px; z-index:300; width:32px; height:32px; border-radius:50%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.3); color:rgba(255,255,255,0.65); font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+
+/* STOP / ALERT overlays */
+.fullscreen-ov { display:none; position:fixed; inset:0; z-index:9999; flex-direction:column; align-items:center; justify-content:center; color:#fff; }
+.fullscreen-ov::before { content:''; position:absolute; inset:0; pointer-events:none; background:repeating-linear-gradient(0deg,rgba(0,0,0,0.07) 0px,transparent 2px,transparent 4px); }
+.ov-title { font-weight:900; font-size:clamp(60px,18vw,170px); letter-spacing:4px; line-height:1; position:relative; z-index:1; }
+.ov-sub   { font-size:clamp(12px,3vw,28px); opacity:0.9; margin-top:8px; letter-spacing:2px; position:relative; z-index:1; }
+.ov-count { font-weight:900; font-size:clamp(80px,23vw,220px); line-height:1; margin-top:4px; position:relative; z-index:1; animation:countPulse 1s ease-in-out infinite; }
+@keyframes countPulse { 0%,100%{transform:scale(1);}50%{transform:scale(1.07);} }
+</style>
+</head>
+<body>
+
+<button class="btn-exit" onclick="if(confirm('Exit?')) window.close()">✕</button>
+
+<div class="felt">
+  <div class="history-strip" id="historyStrip"></div>
+  <div class="runway" id="runway">
+    <div class="slot" id="slot0"></div>
+    <div class="slot" id="slot1"></div>
+    <div class="slot" id="slot2"></div>
+    <div class="slot" id="slot3"></div>
+    <div class="slot" id="slot4"></div>
+  </div>
+  <div class="contract-ov" id="contractOv">
+    <div class="cv-lbl">Final Contract</div>
+    <div class="cv-rule"></div>
+    <div class="cv-val" id="cvVal"></div>
+    <div class="cv-by"  id="cvBy"></div>
+    <button class="cv-btn" onclick="newHand()">New Hand ▶</button>
+  </div>
+</div>
+
+<div class="keyboard">
+  <div class="key-row">
+    <button class="key k-pass"    id="kPass"   onclick="doBid('PASS')">PASS</button>
+    <button class="key k-dbl"     id="kDbl"    onclick="dblTap()" disabled>Dbl</button>
+    <button class="key k-lv"      id="kL1"     onclick="pickLv(1)">1</button>
+    <button class="key k-lv"      id="kL2"     onclick="pickLv(2)">2</button>
+    <button class="key k-lv"      id="kL3"     onclick="pickLv(3)">3</button>
+    <button class="key k-lv"      id="kL4"     onclick="pickLv(4)">4</button>
+    <button class="key k-lv"      id="kL5"     onclick="pickLv(5)">5</button>
+    <button class="key k-lv"      id="kL6"     onclick="pickLv(6)">6</button>
+    <button class="key k-lv"      id="kL7"     onclick="pickLv(7)">7</button>
+    <button class="key k-newhand"              onclick="newHand()">New<br>Hand</button>
+  </div>
+  <div class="key-row">
+    <button class="key k-stop"               onclick="doStop()">STOP</button>
+    <button class="key k-alert" id="kAlert"  onclick="doAlert()">Alert</button>
+    <button class="key k-suit"        id="kC" onclick="pickSuit('♣')" disabled>♣</button>
+    <button class="key k-suit red"    id="kD" onclick="pickSuit('♦')" disabled>♦</button>
+    <button class="key k-suit red"    id="kH" onclick="pickSuit('♥')" disabled>♥</button>
+    <button class="key k-suit"        id="kS" onclick="pickSuit('♠')" disabled>♠</button>
+    <button class="key k-suit purple" id="kN" onclick="pickSuit('NT')" disabled>NT</button>
+    <button class="key k-wake"  id="kWake"   onclick="toggleWake()">💤</button>
+    <button class="key k-undo"  id="kUndo"   onclick="undoBid()" disabled>↩</button>
+  </div>
+</div>
+
+<div id="stopOv" class="fullscreen-ov" style="background:radial-gradient(ellipse at center,#ee1100 0%,#880000 100%);">
+  <div class="ov-title">STOP</div>
+  <div class="ov-sub">Pause — think before bidding</div>
+  <div class="ov-count" id="stopCount">10</div>
+</div>
+<div id="alertOv" class="fullscreen-ov" style="background:radial-gradient(ellipse at center,#ee7700 0%,#883300 100%);">
+  <div class="ov-title">ALERT</div>
+  <div class="ov-sub">Unusual or conventional bid</div>
+  <div class="ov-count" id="alertCount">10</div>
+</div>
+
+<script>
+/* Kill any lingering service workers from old versions */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.getRegistrations().then(regs=>{
+    regs.forEach(r=>r.unregister());
+  });
+}
+
+/* Lock to landscape-primary immediately */
+try {
+  screen.orientation.lock('landscape-primary').catch(()=>{});
+} catch(e){}
+
+const SUITS = ['♣','♦','♥','♠','NT'];
+const DIRS  = ['N','E','S','W'];
+let bids=[], selLv=null, over=false;
+let stopOn=false, stopTmr=null;
+let alertOn=false, alertTmr=null;
+let wakeLock=null, wakeOn=false;
+
+/* Wake lock */
+const wakeSupported = 'wakeLock' in navigator;
+async function requestWake(){
+  if(!wakeSupported){wakeOn=false;updateWakeBtn();return;}
+  try{wakeLock=await navigator.wakeLock.request('screen');wakeOn=true;}catch(e){wakeOn=false;}
+  updateWakeBtn();
+}
+async function toggleWake(){
+  if(!wakeSupported){alert('Screen wake lock not supported.');return;}
+  if(wakeOn&&wakeLock){await wakeLock.release();wakeLock=null;wakeOn=false;}
+  else await requestWake();
+  updateWakeBtn();
+}
+function updateWakeBtn(){
+  const b=document.getElementById('kWake');
+  if(!wakeSupported){b.textContent='💤?';b.style.opacity='0.5';return;}
+  b.textContent=wakeOn?'☀️':'💤';
+  b.classList.toggle('on',wakeOn);
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&wakeOn)requestWake();});
+requestWake();
+
+function showOv(id){document.getElementById(id).style.display='flex';}
+function hideOv(id){document.getElementById(id).style.display='none';}
+
+function getLastReal(){
+  for(let i=bids.length-1;i>=0;i--)
+    if(!['PASS','X','XX','STOP','ALERT'].includes(bids[i].bid)) return bids[i];
+  return null;
+}
+function bidVal(s){
+  if(['PASS','X','XX','STOP','ALERT'].includes(s)) return -1;
+  return parseInt(s[0])*10+SUITS.indexOf(s.slice(1));
+}
+function isLegal(bid){const lr=getLastReal();return !lr||bidVal(bid)>bidVal(lr.bid);}
+function nextDir(){
+  const rb=bids.filter(b=>b.bid!=='STOP'&&b.bid!=='ALERT');
+  if(!rb.length) return 'N';
+  return DIRS[(DIRS.indexOf(rb[rb.length-1].dir)+1)%4];
+}
+function canDbl(){
+  const lr=getLastReal();if(!lr) return false;
+  for(let i=bids.length-1;i>=0;i--){
+    if(['X','XX'].includes(bids[i].bid)) return false;
+    if(!['PASS','STOP','ALERT'].includes(bids[i].bid)) break;
+  }
+  return true;
+}
+
+function doAlert(){
+  if(over||stopOn||alertOn) return;
+  alertOn=true;let t=10;
+  document.getElementById('alertCount').textContent=t;
+  showOv('alertOv');
+  alertTmr=setInterval(()=>{
+    t--;document.getElementById('alertCount').textContent=t;
+    if(t<=0){clearInterval(alertTmr);alertTmr=null;alertOn=false;hideOv('alertOv');updateButtons();}
+  },1000);
+  updateButtons();
+}
+function doStop(){
+  if(over||stopOn||alertOn) return;
+  stopOn=true;let t=10;
+  document.getElementById('stopCount').textContent=t;
+  showOv('stopOv');
+  stopTmr=setInterval(()=>{
+    t--;document.getElementById('stopCount').textContent=t;
+    if(t<=0){clearInterval(stopTmr);stopTmr=null;stopOn=false;hideOv('stopOv');updateButtons();}
+  },1000);
+  updateButtons();
+}
+
+function pickLv(lv){
+  if(over||stopOn||alertOn) return;
+  if(!SUITS.some(su=>isLegal(`${lv}${su}`))) return;
+  selLv=lv;
+  document.querySelectorAll('.k-lv').forEach((b,i)=>b.classList.toggle('sel',i===lv-1));
+  updateSuits();
+}
+function pickSuit(su){
+  if(selLv===null||over||stopOn||alertOn) return;
+  const bid=`${selLv}${su}`;
+  if(!isLegal(bid)) return;
+  doBid(bid);
+}
+function dblTap(){
+  const rb=bids.filter(b=>!['STOP','ALERT'].includes(b.bid));
+  const lastX=[...rb].reverse().find(b=>b.bid==='X');
+  if(lastX&&rb[rb.length-1]===lastX){
+    for(let i=bids.length-1;i>=0;i--){if(bids[i].bid==='X'){bids[i].bid='XX';break;}}
+    renderAll();flashCurrent();return;
+  }
+  doBid('X');
+}
+function doBid(bid){
+  if(over||stopOn||alertOn) return;
+  bids.push({dir:nextDir(),bid});
+  selLv=null;
+  document.querySelectorAll('.k-lv').forEach(b=>b.classList.remove('sel'));
+  checkOver();renderAll();flashCurrent();
+}
+function flashCurrent(){
+  const el=document.getElementById('slot4').querySelector('.card');
+  if(!el) return;
+  el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');
+}
+function checkOver(){
+  const rb=bids.filter(b=>!['STOP','ALERT'].includes(b.bid));
+  if(rb.length>=4&&rb.every(b=>b.bid==='PASS')){over=true;showContract('Passed Out','');return;}
+  if(rb.length>=4&&rb.slice(-3).every(b=>b.bid==='PASS')){
+    const lr=getLastReal();if(!lr) return;
+    over=true;
+    const su=lr.bid.slice(1),lrI=DIRS.indexOf(lr.dir),pI=(lrI+2)%4;
+    let dI=lrI;
+    for(let i=0;i<bids.length;i++){
+      if(!['PASS','X','XX','STOP','ALERT'].includes(bids[i].bid)){
+        const bI=DIRS.indexOf(bids[i].dir);
+        if((bI===lrI||bI===pI)&&bids[i].bid.slice(1)===su){dI=bI;break;}
+      }
+    }
+    let dbl='';
+    for(let i=bids.length-1;i>=0;i--){
+      if(bids[i].bid==='XX'){dbl=' Rdbl';break;}
+      if(bids[i].bid==='X'){dbl=' Dbl';break;}
+      if(!['PASS','STOP','ALERT'].includes(bids[i].bid)) break;
+    }
+    const isRed=su==='♥'||su==='♦';
+    const col=isRed?'#cc1100':su==='NT'?'#6600aa':'#f0f0f0';
+    showContract(
+      `<span style="color:#f0f0f0">${lr.bid[0]}</span><span style="color:${col}">${su}</span><span style="color:rgba(240,205,100,0.9);font-size:0.55em;vertical-align:super">${dbl}</span>`,
+      `Declarer: ${DIRS[dI]}`
+    );
+  }
+}
+function showContract(html,by){
+  document.getElementById('cvVal').innerHTML=html;
+  document.getElementById('cvBy').textContent=by;
+  document.getElementById('contractOv').classList.add('show');
+}
+
+/* ── Card HTML ── */
+function cardHTML(b, isNewest){
+  const{bid}=b;
+  const newCls = isNewest ? ' new-in' : '';
+  if(bid==='PASS')  return `<div class="card c-pass${newCls}"><div class="c-pass-txt">PASS</div></div>`;
+  if(bid==='X')     return `<div class="card c-dbl${newCls}"><div class="c-word" style="color:#cc3300">Dbl</div></div>`;
+  if(bid==='XX')    return `<div class="card c-rdbl${newCls}"><div class="c-word" style="color:#997700">Rdbl</div></div>`;
+  if(bid==='STOP')  return `<div class="card c-stop${newCls}"><div class="c-word" style="color:#fff">STOP</div></div>`;
+  if(bid==='ALERT') return `<div class="card c-alert${newCls}"><div class="c-word" style="color:#cc5500">ALERT</div></div>`;
+  const lv=bid[0],su=bid.slice(1);
+  const isRed=su==='♥'||su==='♦',col=isRed?'#cc0000':su==='NT'?'#550099':'#111';
+  return `<div class="card${newCls}"><div class="c-num">${lv}</div><div class="c-suit" style="color:${col}">${su}</div></div>`;
+}
+
+/* ══════════════════════════════════════════
+   LAYOUT ENGINE
+   ══════════════════════════════════════════
+   All cards are the same full square size.
+   The newest card (slot4) is fully visible on the RIGHT.
+   Older cards peek out to the LEFT, each showing a
+   "peek strip" — we expose a fraction of each card's width.
+
+   Layout (right to left):
+     slot4 (newest): fully visible, right-aligned, width = cardSz
+     slot3: left of slot4, only peekW pixels visible (rest under slot4)
+     slot2: left of slot3's visible strip
+     slot1: left of slot2's visible strip
+     slot0: left of slot1's visible strip
+
+   peekW = how many px of each older card show = ~28% of cardSz
+   The slot container width = peekW (clips the rest via overflow:hidden)
+   The card inside is full cardSz × cardSz but left-aligned in the slot.
+
+   Total display width = cardSz + 4 * peekW + padding
+   We compute cardSz so this fits in the felt width.
+*/
+function positionCards(){
+  const felt = document.querySelector('.felt');
+  if(!felt) return;
+  const fh = felt.offsetHeight;
+  const fw = felt.offsetWidth;
+  const pad = 16;               // left/right padding
+  const peekRatio = 0.55;       // how much of a card peeks out — enough to read the bid
+
+  // Solve: cardSz + 4*(cardSz*peekRatio) + pad*2 <= fw
+  // cardSz * (1 + 4*peekRatio) = fw - pad*2
+  let cardSz = (fw - pad*2) / (1 + 4*peekRatio);
+  // Also cap by felt height minus history strip, with some vertical padding
+  const maxH = fh - 42 - 20;
+  if(cardSz > maxH) cardSz = maxH;
+
+  const peekW = cardSz * peekRatio;
+
+  // Total actual width used
+  const totalW = cardSz + 4*peekW;
+  // Start X so the whole group is horizontally centred
+  const startX = (fw - totalW) / 2;
+
+  const histH = 42;            // height reserved for history strip at top
+  // Vertical centre within remaining space below the strip
+  const topY = histH + (fh - histH - cardSz) / 2;
+
+  // Slot left positions (left edge of each slot's visible strip)
+  // slot0 is leftmost, slot4 is rightmost (full card)
+  // slot i's left edge:
+  //   slot0: startX
+  //   slot1: startX + peekW
+  //   slot2: startX + 2*peekW
+  //   slot3: startX + 3*peekW
+  //   slot4: startX + 4*peekW  (= startX + totalW - cardSz)
+
+  for(let i=0;i<5;i++){
+    const slot = document.getElementById(`slot${i}`);
+    const leftEdge = startX + i*peekW;
+    const slotW = (i===4) ? cardSz : peekW;  // newest is full width, others are peek strip
+
+    slot.style.left   = leftEdge + 'px';
+    slot.style.top    = topY + 'px';
+    slot.style.width  = slotW + 'px';
+    slot.style.height = cardSz + 'px';
+    slot.style.zIndex = i + 1;    // newer = higher z-index = on top
+    // Pass card size to children via CSS var
+    slot.style.setProperty('--card-sz', cardSz + 'px');
+    slot.style.setProperty('--sz',      cardSz + 'px');
+    // No border-radius on clip containers — the card inside has its own
+    slot.style.borderRadius = '0';
+    // Remove overflow:hidden on slot4 (full card shown)
+    slot.style.overflow = (i===4) ? 'visible' : 'hidden';
+  }
+}
+
+/* ── History strip ── */
+function chipHTML(b){
+  const{bid}=b;
+  if(bid==='PASS') return `<span class="h-chip hp">PASS</span>`;
+  if(bid==='X')    return `<span class="h-chip hd">Dbl</span>`;
+  if(bid==='XX')   return `<span class="h-chip hr">Rdbl</span>`;
+  if(bid==='STOP') return `<span class="h-chip hs">STOP</span>`;
+  if(bid==='ALERT')return `<span class="h-chip" style="color:#ffbb44;border-color:rgba(255,170,0,0.3)">Alert</span>`;
+  const lv=bid[0],su=bid.slice(1);
+  const isRed=su==='♥'||su==='♦',isNT=su==='NT';
+  const suCls=isRed?'hs-suit-red':isNT?'hs-suit-purple':'hs-suit-black';
+  return `<span class="h-chip"><span class="hs-suit-black">${lv}</span><span class="${suCls}">${su}</span></span>`;
+}
+function updateHistory(){
+  const strip=document.getElementById('historyStrip');
+  if(!strip) return;
+  strip.innerHTML=bids.map(b=>chipHTML(b)).join('');
+  /* scroll to show the latest chip */
+  strip.scrollLeft=strip.scrollWidth;
+}
+
+/* ── Main render ── */
+function renderAll(){
+  positionCards();
+  updateHistory();
+
+  // display = last 5 bids, excluding ALERTs
+  const display = bids.filter(b=>b.bid!=='ALERT').slice(-5);
+
+  for(let i=0;i<5;i++){
+    const slot = document.getElementById(`slot${i}`);
+    const bi   = display.length - (5-i);  // s0=oldest, s4=newest
+
+    if(bi<0 || bi>=display.length){
+      slot.innerHTML = '';
+    } else {
+      const isNewest = (i===4);
+      slot.innerHTML = cardHTML(display[bi], isNewest);
+    }
+  }
+
+  updateButtons();
+}
+
+function flashCurrent(){
+  const el=document.getElementById('slot4').querySelector('.card');
+  if(!el) return;
+  el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');
+}
+
+function updateButtons(){
+  const locked=over||stopOn||alertOn;
+  document.getElementById('kPass').disabled=locked;
+  document.getElementById('kDbl').disabled=locked||!canDbl();
+  document.getElementById('kAlert').disabled=locked;
+  document.getElementById('kUndo').disabled=bids.length===0;
+  const dblBtn=document.getElementById('kDbl');
+  const rb=bids.filter(b=>!['STOP','ALERT'].includes(b.bid));
+  const lastX=[...rb].reverse().find(b=>b.bid==='X');
+  const showRdbl=lastX&&rb[rb.length-1]===lastX;
+  dblBtn.textContent=showRdbl?'XX':'Dbl';
+  dblBtn.classList.toggle('rdbl-mode',!!showRdbl);
+  document.querySelectorAll('.k-lv').forEach((b,i)=>{
+    b.disabled=locked||!SUITS.some(su=>isLegal(`${i+1}${su}`));
+  });
+  updateSuits();
+}
+function updateSuits(){
+  const ids=['kC','kD','kH','kS','kN'];
+  const locked=over||stopOn||alertOn;
+  ids.forEach((id,i)=>{
+    document.getElementById(id).disabled=locked||selLv===null||!isLegal(`${selLv}${SUITS[i]}`);
+  });
+}
+
+function undoBid(){
+  if(!bids.length) return;
+  bids.pop();over=false;selLv=null;
+  if(stopOn){clearInterval(stopTmr);stopTmr=null;stopOn=false;hideOv('stopOv');}
+  if(alertOn){clearInterval(alertTmr);alertTmr=null;alertOn=false;hideOv('alertOv');}
+  document.querySelectorAll('.k-lv').forEach(b=>b.classList.remove('sel'));
+  document.getElementById('contractOv').classList.remove('show');
+  renderAll();
+}
+function newHand(){
+  bids=[];over=false;selLv=null;
+  if(stopOn){clearInterval(stopTmr);stopTmr=null;stopOn=false;}
+  if(alertOn){clearInterval(alertTmr);alertTmr=null;alertOn=false;}
+  hideOv('stopOv');hideOv('alertOv');
+  document.getElementById('contractOv').classList.remove('show');
+  document.querySelectorAll('.k-lv').forEach(b=>b.classList.remove('sel'));
+  renderAll();
+}
+
+window.addEventListener('resize', ()=>setTimeout(renderAll, 60));
+
+if(document.readyState==='complete'){renderAll();}
+else{window.addEventListener('load', renderAll);}
+</script>
+</body>
+</html>
