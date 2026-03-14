@@ -19,13 +19,6 @@ body {
   display:flex;
   flex-direction:column;
 }
-
-body {
-  background:#0a1f0a;
-  font-family:'Arial Black', Arial, sans-serif;
-  display:flex;
-  flex-direction:column;
-}
 /* ══ GREEN FELT ══ */
 .felt {
   flex:1; min-height:0;
@@ -44,10 +37,24 @@ body {
   border:1.5px solid rgba(201,162,39,0.28); border-radius:12px;
 }
 
+/* ══ BRANDING ══ */
+.branding {
+  position:absolute;
+  top:10px; left:14px;
+  z-index:4;
+  font-family:'Arial Black', Arial, sans-serif;
+  font-size:11px;
+  font-weight:900;
+  color:rgba(201,162,39,0.7);
+  letter-spacing:0.5px;
+  pointer-events:none;
+  white-space:nowrap;
+}
+
 /* ══ HISTORY STRIP ══ */
 .history-strip {
   position:absolute;
-  top:10px; left:14px; right:14px;
+  top:28px; left:14px; right:14px;
   z-index:3;
   display:flex;
   flex-direction:row;
@@ -213,6 +220,7 @@ body {
 <button class="btn-exit" onclick="if(confirm('Exit?')) window.close()">✕</button>
 
 <div class="felt">
+  <div class="branding">Bridge at Sea · bridgescorer.com</div>
   <div class="history-strip" id="historyStrip"></div>
   <div class="runway" id="runway">
     <div class="slot" id="slot0"></div>
@@ -338,7 +346,7 @@ function canDbl(){
 
 function doAlert(){
   if(over||stopOn||alertOn) return;
-  alertOn=true;let t=10;
+  alertOn=true;let t=3;
   document.getElementById('alertCount').textContent=t;
   showOv('alertOv');
   alertTmr=setInterval(()=>{
@@ -474,8 +482,9 @@ function positionCards(){
   // Solve: cardSz + 4*(cardSz*peekRatio) + pad*2 <= fw
   // cardSz * (1 + 4*peekRatio) = fw - pad*2
   let cardSz = (fw - pad*2) / (1 + 4*peekRatio);
+  cardSz = cardSz * 1.10;  // 10% larger
   // Also cap by felt height minus history strip, with some vertical padding
-  const maxH = fh - 42 - 20;
+  const maxH = fh - 60 - 20;
   if(cardSz > maxH) cardSz = maxH;
 
   const peekW = cardSz * peekRatio;
@@ -613,6 +622,10 @@ function newHand(){
 }
 
 window.addEventListener('resize', ()=>setTimeout(renderAll, 60));
+
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js?v=26').catch(()=>{});
+}
 
 if(document.readyState==='complete'){renderAll();}
 else{window.addEventListener('load', renderAll);}
