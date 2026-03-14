@@ -1,4 +1,4 @@
-const CACHE = 'digibid-v26';
+const CACHE = 'digibid-v28';
 const ASSETS = ['./','./digibid.html','./manifest.json','./icon-192.png','./icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
