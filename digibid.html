@@ -335,15 +335,6 @@ function nextDir(){
   if(!rb.length) return 'N';
   return DIRS[(DIRS.indexOf(rb[rb.length-1].dir)+1)%4];
 }
-function canDbl(){
-  const lr=getLastReal();if(!lr) return false;
-  for(let i=bids.length-1;i>=0;i--){
-    if(['X','XX'].includes(bids[i].bid)) return false;
-    if(!['PASS','STOP','ALERT'].includes(bids[i].bid)) break;
-  }
-  return true;
-}
-
 function doAlert(){
   if(over||stopOn||alertOn) return;
   alertOn=true;let t=3;
@@ -384,19 +375,8 @@ function dblTap(){
   if(over||stopOn||alertOn) return;
   doBid('X');
 }
-function canRdbl(){
-  const rb=bids.filter(b=>!['STOP','ALERT'].includes(b.bid));
-  if(!rb.length) return false;
-  // scan backwards through passes to find if last non-pass was a double
-  for(let i=rb.length-1;i>=0;i--){
-    if(rb[i].bid==='X') return true;   // found a double — rdbl is on
-    if(rb[i].bid==='XX') return false;  // already redoubled
-    if(rb[i].bid!=='PASS') return false; // a real bid intervened
-  }
-  return false;
-}
 function doRdbl(){
-  if(over||stopOn||alertOn||!canRdbl()) return;
+  if(over||stopOn||alertOn) return;
   doBid('XX');
 }
 function doBid(bid){
@@ -590,9 +570,9 @@ function flashCurrent(){
 function updateButtons(){
   const locked=over||stopOn||alertOn;
   document.getElementById('kPass').disabled=locked;
-  document.getElementById('kDbl').disabled=locked||!canDbl();
-  document.getElementById('kRdbl').disabled=locked||!canRdbl();
-  document.getElementById('kRdbl').classList.toggle('active',canRdbl()&&!locked);
+  document.getElementById('kDbl').disabled=locked;
+  document.getElementById('kRdbl').disabled=locked;
+  document.getElementById('kRdbl').classList.toggle('active',!locked);
   document.getElementById('kAlert').disabled=locked;
   document.getElementById('kUndo').disabled=bids.length===0;
   document.querySelectorAll('.k-lv').forEach((b,i)=>{
@@ -630,7 +610,7 @@ function newHand(){
 window.addEventListener('resize', ()=>setTimeout(renderAll, 60));
 
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js?v=28').catch(()=>{});
+  navigator.serviceWorker.register('sw.js?v=29').catch(()=>{});
 }
 
 if(document.readyState==='complete'){renderAll();}
