@@ -2,7 +2,7 @@
   "name": "DigiBid",
   "short_name": "DigiBid",
   "description": "Digital bridge bidding box for table use",
-  "start_url": "./digibid.html",
+  "start_url": "./index.html",
   "display": "fullscreen",
   "orientation": "landscape-primary",
   "background_color": "#0a2e10",
