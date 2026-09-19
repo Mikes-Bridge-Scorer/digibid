@@ -1,8 +1,12 @@
-const CACHE = 'digibid-v31';
-const ASSETS = ['./','./index.html','./manifest.json','./icon-192.png','./icon-512.png'];
+const CACHE = 'digibid-v30';
+const ASSETS = ['./digibid.html','./manifest.json','./icon-192.png','./icon-512.png'];
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
-  self.skipWaiting();
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => c.addAll(ASSETS))
+      .then(() => self.skipWaiting())
+      .catch(err => console.error('DigiBid SW install failed:', err))
+  );
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys =>
@@ -11,5 +15,16 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 self.addEventListener('fetch', e => {
-  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+  e.respondWith(
+    caches.match(e.request).then(cached => {
+      if (cached) return cached;
+      return fetch(e.request).then(response => {
+        if (response && response.ok) {
+          const responseClone = response.clone();
+          caches.open(CACHE).then(cache => cache.put(e.request, responseClone));
+        }
+        return response;
+      });
+    })
+  );
 });
