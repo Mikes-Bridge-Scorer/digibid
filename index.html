@@ -276,12 +276,7 @@ body {
 </div>
 
 <script>
-/* Kill any lingering service workers from old versions */
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.getRegistrations().then(regs=>{
-    regs.forEach(r=>r.unregister());
-  });
-}
+/* (removed: an old block here unregistered the service worker on every start, so DigiBid never worked offline) */
 
 /* Lock to landscape-primary immediately */
 try {
@@ -610,7 +605,7 @@ function newHand(){
 window.addEventListener('resize', ()=>setTimeout(renderAll, 60));
 
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js?v=29').catch(()=>{});
+  navigator.serviceWorker.register('sw.js?v=31').catch(()=>{});
 }
 
 if(document.readyState==='complete'){renderAll();}
